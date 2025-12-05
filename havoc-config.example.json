@@ -1,0 +1,21 @@
+{
+  "havoc": {
+    "enabled": true,
+    "teamserver": {
+      "host": "127.0.0.1",
+      "service_port": 40056,
+      "service_endpoint": "/service",
+      "password": "your-service-password"
+    },
+    "options": {
+      "reconnect_interval": 5000,
+      "response_timeout": 60000,
+      "auto_connect": true
+    }
+  },
+  "integration": {
+    "expose_havoc_tools": true,
+    "sync_agents": true,
+    "unified_client_list": true
+  }
+}
