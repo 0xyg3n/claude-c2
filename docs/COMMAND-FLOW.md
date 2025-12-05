@@ -359,7 +359,7 @@ data: https://c2-server.example.com/mcp/sse?sessionId=abc123
   "args": {
     "cmd": "whoami"
   },
-  "timestamp": "2024-12-05T10:30:00.000Z"
+  "timestamp": "2025-12-05T10:30:00.000Z"
 }
 
 // Agent → Server
@@ -471,7 +471,7 @@ data: https://c2-server.example.com/mcp/sse?sessionId=abc123
 │ │     commandId: '550e8400-...',                                        │
 │ │     command: 'shell',                                                  │
 │ │     args: { cmd: 'whoami' },                                          │
-│ │     timestamp: '2024-12-05T10:30:00Z'                                 │
+│ │     timestamp: '2025-12-05T10:30:00Z'                                 │
 │ │   }                                                                    │
 │ ├─ Set timeout (default 30s)                                            │
 │ ├─ Store Promise handlers in pendingCommands                            │
@@ -917,4 +917,4 @@ interface MCPTool {
 ---
 
 *Document generated from claude-c2 v2.0.0*
-*Last updated: 2024-12-05*
+*Last updated: 2025-12-05*

@@ -157,7 +157,7 @@ The following diagram illustrates the complete lifecycle of a command from opera
 │   "commandId": "550e8400-e29b-41d4-a716-446655440000",                     │
 │   "command": "shell",                                                       │
 │   "args": { "cmd": "whoami" },                                             │
-│   "timestamp": "2024-12-05T10:30:00Z"                                      │
+│   "timestamp": "2025-12-05T10:30:00Z"                                      │
 │ }                                                                           │
 └───────────────────────────────────┬─────────────────────────────────────────┘
                                     │
