@@ -17,7 +17,7 @@ class HavocBridge extends EventEmitter {
   constructor(config = {}) {
     super();
     this.config = {
-      teamserver: config.teamserver || 'ws://127.0.0.1:40056/service',
+      teamserver: config.teamserver || 'wss://127.0.0.1:40056/service',
       password: config.password || 'havoc-service-password',
       reconnectInterval: config.reconnectInterval || 5000,
       ...config
@@ -41,7 +41,9 @@ class HavocBridge extends EventEmitter {
     return new Promise((resolve, reject) => {
       console.log(`[Havoc Bridge] Connecting to ${this.config.teamserver}...`);
 
-      this.ws = new WebSocket(this.config.teamserver);
+      this.ws = new WebSocket(this.config.teamserver, {
+        rejectUnauthorized: false  // Accept self-signed certs
+      });
 
       this.ws.on('open', () => {
         console.log('[Havoc Bridge] WebSocket connected, authenticating...');
