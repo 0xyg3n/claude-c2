@@ -57,8 +57,10 @@ Claude:    [Runs recursive search with appropriate OS commands, returns matching
 | **Cross-Platform** | Unified control across Windows, Linux, macOS, and Android |
 | **Adaptive Execution** | AI automatically translates intent to OS-specific commands |
 | **Minimal Footprint** | Agents use native scripting tools with no additional binaries |
-| **Encrypted Transport** | TLS-secured WebSocket connections with OAuth 2.0 authentication |
+| **Encrypted Transport** | TLS-secured WebSocket connections with secure authentication |
+| **Claude.ai + Claude Code** | Works with both web interface and CLI (API key auth) |
 | **Auto-Recovery** | Agents automatically reconnect on connection loss |
+| **Brute-Force Protection** | Rate limiting with exponential backoff lockouts |
 
 <br>
 
@@ -80,7 +82,7 @@ Claude:    [Runs recursive search with appropriate OS commands, returns matching
 │    │   OPERATOR   │   MCP   │   COMMAND    │   WSS   │    TARGET    │     │
 │    │              │◄───────►│              │◄───────►│              │     │
 │    │  Claude.ai   │   SSE   │    SERVER    │  JSON   │    AGENTS    │     │
-│    │              │         │              │         │              │     │
+│    │  Claude Code │         │              │         │              │     │
 │    └──────────────┘         └──────────────┘         └──────────────┘     │
 │                                                                            │
 │         │                         │                         │             │
@@ -147,7 +149,7 @@ SSL_KEY_PATH=/path/to/key.pem
 npm start
 ```
 
-### Claude.ai Integration
+### Claude.ai Integration (Web)
 
 Configure MCP connector in Claude.ai settings:
 
@@ -157,6 +159,67 @@ Configure MCP connector in Claude.ai settings:
 | Authentication | OAuth 2.0 |
 | Client ID | Value from `.env` |
 | Client Secret | Value from `.env` |
+
+<br>
+
+### Claude Code Integration (CLI) - Recommended
+
+Claude Code CLI supports API key authentication, which is simpler and more reliable than OAuth for remote servers.
+
+**Step 1: Generate API Key**
+
+```bash
+node -e "const{randomBytes,createHash}=require('crypto');const k=randomBytes(32).toString('base64url');console.log('API_KEY='+k);console.log('API_KEY_HASH='+createHash('sha256').update(k).digest('hex'))"
+```
+
+Save the `API_KEY` securely - you'll need it for client configuration.
+Add `API_KEY_HASH` to your `.env` file (never store the plaintext key on server).
+
+**Step 2: Restart Server**
+
+```bash
+# Restart to load new config
+pkill -f "node src/server.js"
+node src/server.js
+```
+
+**Step 3: Configure Claude Code**
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "claude-c2": {
+      "type": "sse",
+      "url": "https://your-domain.com/mcp/sse",
+      "headers": {
+        "X-API-Key": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**Step 4: Verify Connection**
+
+```bash
+claude  # Start Claude Code
+/mcp    # Check MCP servers - should show "connected"
+```
+
+<br>
+
+### Security Features
+
+| Feature | Description |
+|:--------|:------------|
+| **256-bit API Keys** | Cryptographically secure (base64url encoded) |
+| **Hash-Only Storage** | Server stores SHA-256 hash, never plaintext |
+| **Timing-Safe Comparison** | Prevents timing attacks |
+| **Rate Limiting** | 5 attempts per minute per IP |
+| **Exponential Backoff** | 30s → 60s → 2m → 4m → ... → 30m max lockout |
+| **Audit Logging** | All auth attempts logged to `logs/security.log` |
 
 <br>
 

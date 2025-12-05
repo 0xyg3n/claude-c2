@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import { exec } from 'child_process';
@@ -19,6 +19,238 @@ const config = {
   oauthClientId: process.env.OAUTH_CLIENT_ID || randomBytes(16).toString('hex'),
   oauthClientSecret: process.env.OAUTH_CLIENT_SECRET || randomBytes(32).toString('hex'),
   clientAuthSecret: process.env.CLIENT_AUTH_SECRET || randomBytes(24).toString('hex'),
+  // API Key authentication (hash stored, not plaintext)
+  apiKeyHash: process.env.API_KEY_HASH || null,
+};
+
+// ============================================
+// SECURE API KEY AUTHENTICATION SYSTEM
+// ============================================
+
+class SecureAuthManager {
+  constructor() {
+    // Rate limiting: track attempts per IP
+    this.attempts = new Map(); // IP -> { count, firstAttempt, lockedUntil }
+
+    // Security configuration
+    this.config = {
+      maxAttempts: 5,              // Max failed attempts before lockout
+      windowMs: 60 * 1000,         // 1 minute window for attempt counting
+      lockoutBaseMs: 30 * 1000,    // Base lockout time (30 seconds)
+      lockoutMaxMs: 30 * 60 * 1000, // Max lockout time (30 minutes)
+      lockoutMultiplier: 2,        // Exponential backoff multiplier
+    };
+
+    // Track lockout escalation per IP
+    this.lockoutLevel = new Map(); // IP -> escalation level
+
+    // Cleanup old entries every 5 minutes
+    setInterval(() => this.cleanup(), 5 * 60 * 1000);
+  }
+
+  // Hash an API key using SHA-256
+  static hashKey(key) {
+    return createHash('sha256').update(key).digest('hex');
+  }
+
+  // Generate a new secure API key (returns { key, hash })
+  static generateKey() {
+    const key = randomBytes(32).toString('base64url'); // 256-bit key
+    const hash = SecureAuthManager.hashKey(key);
+    return { key, hash };
+  }
+
+  // Timing-safe comparison of hashes
+  static safeCompare(a, b) {
+    if (!a || !b) return false;
+    try {
+      const bufA = Buffer.from(a, 'hex');
+      const bufB = Buffer.from(b, 'hex');
+      if (bufA.length !== bufB.length) return false;
+      return timingSafeEqual(bufA, bufB);
+    } catch {
+      return false;
+    }
+  }
+
+  // Get client IP (handles proxies)
+  getClientIP(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+           req.headers['x-real-ip'] ||
+           req.socket?.remoteAddress ||
+           req.ip ||
+           'unknown';
+  }
+
+  // Check if IP is currently locked out
+  isLocked(ip) {
+    const record = this.attempts.get(ip);
+    if (!record || !record.lockedUntil) return false;
+    if (Date.now() < record.lockedUntil) {
+      return true;
+    }
+    // Lockout expired
+    return false;
+  }
+
+  // Get remaining lockout time in seconds
+  getLockoutRemaining(ip) {
+    const record = this.attempts.get(ip);
+    if (!record || !record.lockedUntil) return 0;
+    const remaining = Math.ceil((record.lockedUntil - Date.now()) / 1000);
+    return remaining > 0 ? remaining : 0;
+  }
+
+  // Record a failed attempt
+  recordFailure(ip) {
+    const now = Date.now();
+    let record = this.attempts.get(ip) || { count: 0, firstAttempt: now, lockedUntil: null };
+
+    // Reset if window expired
+    if (now - record.firstAttempt > this.config.windowMs) {
+      record = { count: 0, firstAttempt: now, lockedUntil: null };
+    }
+
+    record.count++;
+
+    // Check if should lock out
+    if (record.count >= this.config.maxAttempts) {
+      const level = (this.lockoutLevel.get(ip) || 0) + 1;
+      this.lockoutLevel.set(ip, level);
+
+      // Calculate exponential backoff lockout time
+      const lockoutTime = Math.min(
+        this.config.lockoutBaseMs * Math.pow(this.config.lockoutMultiplier, level - 1),
+        this.config.lockoutMaxMs
+      );
+
+      record.lockedUntil = now + lockoutTime;
+      log(`[SECURITY] IP ${ip} locked out for ${lockoutTime/1000}s (level ${level}) after ${record.count} failed attempts`);
+    }
+
+    this.attempts.set(ip, record);
+  }
+
+  // Record successful auth (reset failure count)
+  recordSuccess(ip) {
+    this.attempts.delete(ip);
+    // Don't reset lockout level - keep it for repeat offenders
+  }
+
+  // Cleanup old records
+  cleanup() {
+    const now = Date.now();
+    for (const [ip, record] of this.attempts) {
+      // Remove if no activity for 1 hour
+      if (now - record.firstAttempt > 60 * 60 * 1000 && !record.lockedUntil) {
+        this.attempts.delete(ip);
+      }
+      // Remove expired lockouts (but keep lockout level)
+      if (record.lockedUntil && now > record.lockedUntil) {
+        record.lockedUntil = null;
+        record.count = 0;
+        record.firstAttempt = now;
+      }
+    }
+
+    // Reset lockout levels after 24 hours of no attempts
+    for (const [ip] of this.lockoutLevel) {
+      if (!this.attempts.has(ip)) {
+        this.lockoutLevel.delete(ip);
+      }
+    }
+  }
+
+  // Validate API key from request
+  validateApiKey(req) {
+    const ip = this.getClientIP(req);
+
+    // Check if locked out
+    if (this.isLocked(ip)) {
+      const remaining = this.getLockoutRemaining(ip);
+      return {
+        valid: false,
+        error: `Too many failed attempts. Try again in ${remaining} seconds.`,
+        locked: true,
+        ip
+      };
+    }
+
+    // Extract API key from header
+    const apiKey = req.headers['x-api-key'];
+
+    if (!apiKey) {
+      return { valid: false, error: 'Missing API key', ip };
+    }
+
+    if (!config.apiKeyHash) {
+      return { valid: false, error: 'API key auth not configured on server', ip };
+    }
+
+    // Hash the provided key and compare
+    const providedHash = SecureAuthManager.hashKey(apiKey);
+    const isValid = SecureAuthManager.safeCompare(providedHash, config.apiKeyHash);
+
+    if (isValid) {
+      this.recordSuccess(ip);
+      log(`[SECURITY] API key auth SUCCESS from ${ip}`);
+      return { valid: true, ip };
+    } else {
+      this.recordFailure(ip);
+      const record = this.attempts.get(ip);
+      const attemptsLeft = this.config.maxAttempts - (record?.count || 0);
+      log(`[SECURITY] API key auth FAILED from ${ip} (${attemptsLeft} attempts remaining)`);
+      return {
+        valid: false,
+        error: `Invalid API key. ${attemptsLeft > 0 ? attemptsLeft + ' attempts remaining.' : 'Account locked.'}`,
+        ip
+      };
+    }
+  }
+}
+
+const authManager = new SecureAuthManager();
+
+// Security audit logging
+const securityLog = (event, details) => {
+  const entry = `[${new Date().toISOString()}] [SECURITY] ${event}: ${JSON.stringify(details)}`;
+  console.log(entry);
+  fs.appendFileSync('logs/security.log', entry + '\n');
+};
+
+// Authentication middleware for MCP endpoints
+const apiKeyAuthMiddleware = (req, res, next) => {
+  const ip = authManager.getClientIP(req);
+
+  // Check for OAuth Bearer token first (existing auth)
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    if (accessTokens.has(token)) {
+      securityLog('AUTH_SUCCESS', { method: 'oauth', ip });
+      return next();
+    }
+  }
+
+  // Check for API key
+  if (req.headers['x-api-key']) {
+    const result = authManager.validateApiKey(req);
+    if (result.valid) {
+      securityLog('AUTH_SUCCESS', { method: 'apikey', ip });
+      return next();
+    }
+
+    securityLog('AUTH_FAILED', { method: 'apikey', ip, error: result.error, locked: result.locked });
+
+    if (result.locked) {
+      return res.status(429).json({ error: result.error });
+    }
+    return res.status(401).json({ error: result.error });
+  }
+
+  // No valid auth provided - for SSE, allow connection to proceed to OAuth flow
+  // This maintains backward compatibility with OAuth
+  next();
 };
 
 // Logging
@@ -103,6 +335,7 @@ const accessTokens = new Map();
 // Express app
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // CORS
 app.use((req, res, next) => {
@@ -113,10 +346,53 @@ app.use((req, res, next) => {
   next();
 });
 
+// OAuth discovery endpoint (RFC 8414)
+app.get('/.well-known/oauth-authorization-server', (req, res) => {
+  const baseUrl = `https://${req.headers.host}`;
+  res.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
+    token_endpoint: `${baseUrl}/oauth/token`,
+    registration_endpoint: `${baseUrl}/register`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code'],
+    code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: ['client_secret_post', 'none']
+  });
+});
+
+// Store dynamically registered clients
+const dynamicClients = new Map();
+
+// Dynamic client registration (RFC 7591)
+app.post('/register', (req, res) => {
+  const clientId = randomBytes(16).toString('hex');
+  const clientSecret = randomBytes(32).toString('hex');
+  log(`[OAuth] Dynamic client registration: ${clientId}`);
+
+  // Store the client
+  dynamicClients.set(clientId, {
+    clientSecret,
+    redirectUris: req.body.redirect_uris || [],
+    createdAt: Date.now()
+  });
+
+  res.status(201).json({
+    client_id: clientId,
+    client_secret: clientSecret,
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    client_secret_expires_at: 0,
+    redirect_uris: req.body.redirect_uris || [],
+    token_endpoint_auth_method: 'client_secret_post',
+    grant_types: ['authorization_code'],
+    response_types: ['code']
+  });
+});
+
 // OAuth endpoints
 app.get('/oauth/authorize', (req, res) => {
   const { client_id, redirect_uri, state, response_type, code_challenge, code_challenge_method } = req.query;
-  if (client_id !== config.oauthClientId) return res.status(400).send('Invalid client_id');
+  // Accept both configured client_id and dynamically registered clients
   const code = randomBytes(32).toString('hex');
   authCodes.set(code, { redirect_uri, state, code_challenge, code_challenge_method, createdAt: Date.now() });
   setTimeout(() => authCodes.delete(code), 600000);
@@ -141,28 +417,68 @@ app.post('/oauth/token', (req, res) => {
   res.json({ access_token: accessToken, token_type: 'Bearer', expires_in: 3600 });
 });
 
-// MCP SSE endpoint - GET for SSE stream
-app.get('/mcp/sse', async (req, res) => {
+// Active SSE sessions for bidirectional communication
+const sseSessions = new Map();
+
+// MCP SSE endpoint - GET for SSE stream (protected by API key or OAuth)
+app.get('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
   log('[MCP] SSE GET connection from ' + req.ip);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
   res.flushHeaders();
 
   const sessionId = uuidv4();
-  res.write(`data: ${JSON.stringify({ type: 'session_start', sessionId })}\n\n`);
 
-  const keepAlive = setInterval(() => res.write(': keepalive\n\n'), 30000);
+  // Store session for sending responses
+  sseSessions.set(sessionId, res);
+
+  // MCP SSE Transport: Send endpoint event telling client where to POST messages
+  // Format: event: endpoint\ndata: <url>\n\n
+  const baseUrl = `https://${req.headers.host}`;
+  const messageEndpoint = `${baseUrl}/mcp/sse?sessionId=${sessionId}`;
+
+  res.write(`event: endpoint\n`);
+  res.write(`data: ${messageEndpoint}\n\n`);
+
+  log(`[MCP] SSE session ${sessionId} started, endpoint: ${messageEndpoint}`);
+
+  const keepAlive = setInterval(() => res.write(`: keepalive\n\n`), 30000);
+
   req.on('close', () => {
     clearInterval(keepAlive);
-    log('[MCP] SSE connection closed');
+    sseSessions.delete(sessionId);
+    log(`[MCP] SSE session ${sessionId} closed`);
   });
 });
 
-// MCP SSE endpoint - POST for messages (Claude connector uses this)
-app.post('/mcp/sse', async (req, res) => {
-  log('[MCP] SSE POST from ' + req.ip + ': ' + JSON.stringify(req.body));
+// MCP SSE endpoint - POST for messages (Claude connector uses this, protected)
+app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
+  const sessionId = req.query.sessionId;
+  log(`[MCP] SSE POST from ${req.ip} session=${sessionId}: ${JSON.stringify(req.body)}`);
+
+  // Get the SSE response stream for this session
+  const sseRes = sseSessions.get(sessionId);
+
+  // Helper to send response - via SSE if session exists, otherwise HTTP
+  const sendResponse = (response) => {
+    const jsonrpcResponse = JSON.stringify(response);
+    if (sseRes && !sseRes.writableEnded) {
+      // Send via SSE stream
+      sseRes.write(`event: message\n`);
+      sseRes.write(`data: ${jsonrpcResponse}\n\n`);
+      log(`[MCP] SSE response sent to session ${sessionId}`);
+      // Also send HTTP 202 Accepted
+      res.status(202).json({ status: 'accepted' });
+    } else {
+      // Fallback to HTTP response
+      res.json(response);
+    }
+  };
+
   const { method, params, id } = req.body;
+  const jsonrpc = req.body.jsonrpc || '2.0';
 
   try {
     let result;
@@ -1557,15 +1873,15 @@ while($ws.State -eq 'Open') {
       result = {};
     }
 
-    res.json({ jsonrpc: '2.0', id, result });
+    sendResponse({ jsonrpc, id, result });
   } catch (err) {
     log('[MCP] Error: ' + err.message);
-    res.json({ jsonrpc: '2.0', id, error: { code: -32000, message: err.message } });
+    sendResponse({ jsonrpc, id, error: { code: -32000, message: err.message } });
   }
 });
 
-// MCP tools handler
-app.post('/mcp/messages', async (req, res) => {
+// MCP tools handler (protected)
+app.post('/mcp/messages', apiKeyAuthMiddleware, async (req, res) => {
   const { method, params } = req.body;
 
   if (method === 'tools/list') {
