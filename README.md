@@ -94,14 +94,171 @@ Claude:    [Runs recursive search with appropriate OS commands, returns matching
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Communication Flow:**
+<br>
 
-1. Operator interacts with Claude AI through claude.ai interface
-2. Claude connects to C2 server via MCP (Model Context Protocol) over SSE
-3. Server maintains persistent WebSocket connections to all deployed agents
-4. Commands are routed to appropriate agents based on operator intent
-5. Agents execute commands using native OS tools and return results
-6. Claude formats and presents results to operator
+### Command Execution Flow
+
+The following diagram illustrates the complete lifecycle of a command from operator request to agent execution:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: OPERATOR REQUEST                                                    │
+│                                                                             │
+│ User (Claude.ai/Code):  "Execute 'whoami' on LAPTOP01"                     │
+│ Claude AI translates natural language to MCP tool call                     │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: MCP REQUEST (JSON-RPC 2.0)                                          │
+│                                                                             │
+│ POST /mcp/sse                                                               │
+│ Header: X-API-Key: [api-key]                                               │
+│                                                                             │
+│ {                                                                           │
+│   "jsonrpc": "2.0",                                                         │
+│   "method": "tools/call",                                                   │
+│   "params": { "name": "shell", "arguments": { "cmd": "whoami" } }          │
+│ }                                                                           │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: AUTHENTICATION (SecureAuthManager)                                  │
+│                                                                             │
+│ ├─ Extract client IP address                                               │
+│ ├─ Check lockout status (exponential backoff)                              │
+│ ├─ Hash API key: SHA-256(apiKey)                                           │
+│ ├─ Timing-safe compare with stored hash                                    │
+│ └─ On success: proceed | On failure: 401/423 + rate limit                 │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: TOOL HANDLER (ClientManager)                                        │
+│                                                                             │
+│ ├─ Parse tool name: "shell"                                                │
+│ ├─ Smart client selection:                                                 │
+│ │   ├─ If client_id provided → use specified client                       │
+│ │   ├─ If 1 client connected → auto-select                                │
+│ │   └─ If 0 or multiple → error                                           │
+│ ├─ Generate command UUID                                                   │
+│ └─ Queue command with timeout (default 30s)                               │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    │ WebSocket (WSS)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: COMMAND DISPATCH                                                    │
+│                                                                             │
+│ Server sends to agent via WebSocket:                                       │
+│ {                                                                           │
+│   "type": "command",                                                        │
+│   "commandId": "550e8400-e29b-41d4-a716-446655440000",                     │
+│   "command": "shell",                                                       │
+│   "args": { "cmd": "whoami" },                                             │
+│   "timestamp": "2024-12-05T10:30:00Z"                                      │
+│ }                                                                           │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: AGENT EXECUTION                                                     │
+│                                                                             │
+│ Platform-specific execution:                                               │
+│                                                                             │
+│ Windows (PowerShell):  $output = iex $msg.args.cmd                         │
+│ Linux (Bash/Python):   output = subprocess.run(cmd, shell=True)            │
+│ macOS (Bash):          output=$(eval "$cmd")                               │
+│                                                                             │
+│ Captures: stdout, stderr, exit code                                       │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    │ WebSocket (WSS)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 7: RESPONSE                                                            │
+│                                                                             │
+│ Agent sends result:                                                        │
+│ {                                                                           │
+│   "type": "command_response",                                               │
+│   "commandId": "550e8400-e29b-41d4-a716-446655440000",                     │
+│   "result": { "success": true, "stdout": "admin", "exitCode": 0 }          │
+│ }                                                                           │
+│                                                                             │
+│ Server resolves pending Promise, logs to history                           │
+└───────────────────────────────────┬─────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 8: MCP RESPONSE                                                        │
+│                                                                             │
+│ Sent via SSE stream:                                                       │
+│ event: message                                                              │
+│ data: {"jsonrpc":"2.0","result":{"content":[{"type":"text",...}]}}        │
+│                                                                             │
+│ Claude formats for operator: "Command executed. Output: admin"             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+<br>
+
+### Core Components
+
+| Component | Location | Responsibility |
+|:----------|:---------|:---------------|
+| **SecureAuthManager** | `src/server.js:30-210` | API key validation, rate limiting, brute-force protection |
+| **ClientManager** | `src/server.js:264-326` | Agent registration, command routing, response handling |
+| **MCP Handler** | `src/server.js:457-1876` | 80+ tool definitions, tool execution, JSON-RPC processing |
+| **WebSocket Server** | `src/server.js:2111-2174` | Persistent agent connections, heartbeat, message routing |
+
+<br>
+
+### Protocol Details
+
+| Layer | Protocol | Details |
+|:------|:---------|:--------|
+| **Operator ↔ Server** | MCP over SSE | JSON-RPC 2.0, HTTPS, API Key or OAuth 2.0 |
+| **Server ↔ Agent** | WebSocket | WSS (TLS), JSON messages, 15s heartbeat |
+| **Authentication** | SHA-256 | Timing-safe comparison, hash-only storage |
+| **Binary Data** | Base64 | Screenshots and files encoded for JSON transport |
+
+<br>
+
+### Message Types
+
+**MCP (Operator ↔ Server):**
+
+| Method | Description |
+|:-------|:------------|
+| `initialize` | Protocol handshake, capability negotiation |
+| `tools/list` | Return available tool definitions |
+| `tools/call` | Execute a tool with arguments |
+
+**WebSocket (Server ↔ Agent):**
+
+| Type | Direction | Purpose |
+|:-----|:----------|:--------|
+| `register` | Agent → Server | Initial connection with system info |
+| `registered` | Server → Agent | Registration confirmation |
+| `ping` / `pong` | Bidirectional | Heartbeat (15s interval) |
+| `command` | Server → Agent | Execute command request |
+| `command_response` | Agent → Server | Command result with stdout/stderr |
+
+<br>
+
+### Timeout Configuration
+
+| Command Type | Timeout | Reason |
+|:-------------|:--------|:-------|
+| Shell commands | 30s | Standard execution |
+| Screenshots | 60s | Screen capture + base64 encoding |
+| Credential extraction | 120s | Complex memory/registry operations |
+| File operations | 30s | Standard I/O |
+
+<br>
+
+**For comprehensive technical documentation, see [Command Flow Documentation](docs/COMMAND-FLOW.md).**
 
 <br>
 
@@ -331,6 +488,7 @@ When a single agent is connected, Claude automatically selects it. With multiple
 
 | Document | Description |
 |:---------|:------------|
+| [Command Flow](docs/COMMAND-FLOW.md) | Complete technical documentation of command execution pipeline |
 | [Integration Guide](docs/INTEGRATIONS.md) | Claude.ai configuration and API setup |
 | [Android Operations](docs/ANDROID-TERMUX.md) | Termux-specific features and Termux:API |
 
