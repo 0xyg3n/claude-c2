@@ -43,8 +43,8 @@ Claude:    [Queries client manager, returns formatted list with OS, hostname, IP
 Operator:  "Capture the screen on the Windows workstation"
 Claude:    [Identifies target, executes screenshot, saves to server, confirms completion]
 
-Operator:  "Search for configuration files containing credentials"
-Claude:    [Runs recursive search with appropriate OS commands, returns matching paths]
+Operator:  "List files in the user's Documents folder"
+Claude:    [Runs directory listing on target, returns formatted file list]
 ```
 
 <br>
@@ -209,7 +209,7 @@ The following diagram illustrates the complete lifecycle of a command from opera
 |:----------|:---------|:---------------|
 | **SecureAuthManager** | `src/server.js:30-210` | API key validation, rate limiting, brute-force protection |
 | **ClientManager** | `src/server.js:264-326` | Agent registration, command routing, response handling |
-| **MCP Handler** | `src/server.js:457-1876` | 80+ tool definitions, tool execution, JSON-RPC processing |
+| **MCP Handler** | `src/server.js:457-1876` | 38 tool definitions, tool execution, JSON-RPC processing |
 | **WebSocket Server** | `src/server.js:2111-2174` | Persistent agent connections, heartbeat, message routing |
 
 <br>
@@ -253,7 +253,6 @@ The following diagram illustrates the complete lifecycle of a command from opera
 |:-------------|:--------|:-------|
 | Shell commands | 30s | Standard execution |
 | Screenshots | 60s | Screen capture + base64 encoding |
-| Credential extraction | 120s | Complex memory/registry operations |
 | File operations | 30s | Standard I/O |
 
 <br>
@@ -454,10 +453,9 @@ Agents operate in memory without persistence by default. Connection resilience i
 | `"List all connected clients"` | Display all active agents with system information |
 | `"Execute whoami on target"` | Run command and return output |
 | `"Take a screenshot"` | Capture display and save to server |
-| `"Find all PDF documents"` | Recursive filesystem search |
 | `"Show network configuration"` | Execute ipconfig/ifconfig based on OS |
 | `"List running processes"` | Display process list with details |
-| `"Open URL on Android device"` | Launch browser with specified URL |
+| `"Read a config file"` | Read file contents from target system |
 
 When a single agent is connected, Claude automatically selects it. With multiple agents, specify the target by name or identifier.
 
