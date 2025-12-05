@@ -209,7 +209,7 @@ The following diagram illustrates the complete lifecycle of a command from opera
 |:----------|:---------|:---------------|
 | **SecureAuthManager** | `src/server.js:30-210` | API key validation, rate limiting, brute-force protection |
 | **ClientManager** | `src/server.js:264-326` | Agent registration, command routing, response handling |
-| **MCP Handler** | `src/server.js:457-1876` | 36 tool definitions, tool execution, JSON-RPC processing |
+| **MCP Handler** | `src/server.js:457-1876` | 38 tool definitions, tool execution, JSON-RPC processing |
 | **WebSocket Server** | `src/server.js:2111-2174` | Persistent agent connections, heartbeat, message routing |
 
 <br>
@@ -452,6 +452,8 @@ Agents operate in memory without persistence by default. Connection resilience i
 |:--------|:-------|
 | `"List all connected clients"` | Display all active agents with system information |
 | `"Execute whoami on target"` | Run shell command and return output |
+| `"Get system info"` | Display OS, hostname, user, domain |
+| `"List running processes"` | Display process list with PIDs and memory |
 | `"Take a screenshot"` | Capture display (Windows) |
 | `"List files in Documents"` | List directory contents |
 | `"Read config.txt"` | Read file contents from target system |
