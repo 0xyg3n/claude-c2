@@ -1,0 +1,30 @@
+{
+  "name": "claude-c2",
+  "version": "1.0.0",
+  "description": "MCP Remote Agent Controller - Allows Claude to control remote PCs",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["mcp", "remote-agent", "claude", "automation"],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3"
+  }
+}

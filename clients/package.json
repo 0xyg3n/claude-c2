@@ -1,0 +1,16 @@
+{
+  "name": "mcp-remote-agent-client",
+  "version": "1.0.0",
+  "description": "Remote Agent Client for MCP Remote Agent Controller",
+  "type": "module",
+  "main": "agent.js",
+  "bin": {
+    "mcp-agent": "./agent.js"
+  },
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

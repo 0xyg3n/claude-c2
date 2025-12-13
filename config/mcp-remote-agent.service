@@ -1,0 +1,26 @@
+[Unit]
+Description=MCP Remote Agent Controller
+After=network.target
+
+[Service]
+Type=simple
+User=iozac
+Group=iozac
+WorkingDirectory=/home/iozac/mcp-remote-agent
+ExecStart=/usr/bin/node /home/iozac/mcp-remote-agent/src/server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+
+# Logging
+StandardOutput=append:/home/iozac/mcp-remote-agent/logs/server.log
+StandardError=append:/home/iozac/mcp-remote-agent/logs/error.log
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/iozac/mcp-remote-agent/logs
+
+[Install]
+WantedBy=multi-user.target

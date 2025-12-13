@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MCP Remote Agent - Downloads</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 40px; }
+    h1 { color: #00d4ff; }
+    .agent { background: #16213e; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #00d4ff; }
+    .agent h3 { color: #00d4ff; margin-top: 0; }
+    code { background: #0f0f23; padding: 10px; display: block; margin: 10px 0; border-radius: 4px; color: #0f0; overflow-x: auto; }
+    .platform { color: #888; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>MCP Remote Agent</h1>
+  <p>Download and run the agent for your platform:</p>
+
+  <div class="agent">
+    <h3>Windows (PowerShell)</h3>
+    <p class="platform">Windows 10/11, Windows Server 2016+</p>
+    <code>irm https://<SERVER_DOMAIN>/agent/windows | iex</code>
+    <p>Or with custom ID:</p>
+    <code>irm https://<SERVER_DOMAIN>/agent/windows -OutFile agent.ps1; .\agent.ps1 -Id "MYPC"</code>
+  </div>
+
+  <div class="agent">
+    <h3>Linux (Bash + Python)</h3>
+    <p class="platform">Ubuntu, Debian, CentOS, Fedora, etc.</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/linux | bash</code>
+    <p>Or with custom ID:</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/linux -o agent.sh && bash agent.sh -i "MYSERVER"</code>
+  </div>
+
+  <div class="agent">
+    <h3>macOS</h3>
+    <p class="platform">macOS 10.15+ (Catalina and newer)</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/macos | bash</code>
+    <p>Or with custom ID:</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/macos -o agent.sh && bash agent.sh -i "MYMAC"</code>
+  </div>
+
+  <div class="agent">
+    <h3>Android (Termux)</h3>
+    <p class="platform">Termux app on Android</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/termux | bash</code>
+    <p>Or with custom ID:</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/termux -o agent.sh && bash agent.sh -i "MYPHONE"</code>
+  </div>
+
+  <div class="agent">
+    <h3>Cross-Platform (Python)</h3>
+    <p class="platform">Any platform with Python 3.7+</p>
+    <code>curl -s https://<SERVER_DOMAIN>/agent/python -o agent.py && python3 agent.py</code>
+    <p>With options:</p>
+    <code>python3 agent.py --id "MYDEVICE" --server "ws://<SERVER_DOMAIN>:3103"</code>
+  </div>
+
+  <hr style="border-color:#333;margin:30px 0">
+  <p style="color:#666">Connected clients: <span id="count">?</span></p>
+  <script>
+    fetch('/test/clients').then(r=>r.json()).then(d=>document.getElementById('count').textContent=d.length);
+  </script>
+</body>
+</html>
